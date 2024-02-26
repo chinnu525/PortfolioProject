@@ -1,0 +1,159 @@
+--SELECT * FROM CovidDeathscsv
+--ORDER BY 3,4
+
+--SELECT * FROM CovidVaccinationscsv
+--ORDER BY 3,4
+
+Select *
+From PortifolioProject..CovidDeathscsv
+Where continent is not null 
+order by 3,4
+
+
+--Total cases vs population
+SELECT [location],date,total_cases,population, (total_cases/CAST(population AS float))*100 as TotalCasesOnPopulation
+FROM PortifolioProject..CovidDeathscsv
+ORDER BY 1,2
+
+--Total cases vs Total deaths
+Select [location],date,total_cases,total_deaths, (total_cases/total_deaths)*100 as RatioBtwCasesAndDeaths
+From PortifolioProject..CovidDeathscsv
+Where continent is not null 
+order by 3,4
+
+--Country With Highest Infection Rate 
+Select [location],population,MAX(total_cases) as HighestInfectionCount, (MAX(total_cases)/CONVERT(float,population))*100 as HighestInfectionRate
+From PortifolioProject..CovidDeathscsv
+Where continent is not null 
+GROUP BY location,population
+order by HighestInfectionRate DESC
+
+--Highest Cardiovascular Death Rate
+Select location,population,MAX(cardiovasc_death_rate) as HighestCardiovascularDeathCount,
+(MAX(cardiovasc_death_rate)/CONVERT(float,population)) as HighestCardiovaascularDeathRate
+From PortifolioProject..CovidDeathscsv
+Where continent is not null 
+GROUP BY [location],population
+order by HighestCardiovaascularDeathRate DESC , HighestCardiovascularDeathCount DESC
+
+--Total Death Count Of Continents
+Select continent, MAX(cast(Total_deaths as int)) as TotalDeathCount
+From PortifolioProject..CovidDeathscsv
+--Where location like '%states%'
+Where continent is not null 
+Group by continent
+order by TotalDeathCount desc
+
+
+--Locations With Highest Death Ratio
+WITH Max_DeathRate
+AS
+(
+Select [location],population,SUM(total_deaths) as TotalDeathCount
+From PortifolioProject..CovidDeathscsv
+WHERE continent is not NULL
+GROUP BY [location],population
+)
+SELECT *,
+(MAX(TotalDeathCount)/CONVERT(float,population)) as HighestDeathPercentage
+FROM Max_DeathRate
+GROUP BY TotalDeathCount,population,[location]
+ORDER BY HighestDeathPercentage DESC
+
+--Total Population vs Vaccination
+--Shows the percentage of population that has recieved atleast one covid vaccine
+SELECT Dea.continent,Dea.[location],Dea.[date],dea.population,Vac.new_vaccinations,
+SUM(Vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location,dea.date) AS ConcatinatingPeopleVaccinations
+FROM CovidDeathscsv as Dea
+JOIN CovidVaccinationscsv as Vac
+ON Dea.[location] = Vac.[location]
+AND Dea.[date] = Vac.[date]
+WHERE Dea.continent is not NULL
+ORDER BY 2,3
+
+--Using temp tables to calculate the above percentage of people vaccinated
+DROP TABLE IF EXISTS #PercentagePeopleVaccinated
+CREATE TABLE #PercentagePeopleVaccinated(
+    continent nvarchar(50),
+    location nvarchar(50),
+    date DATETIME,
+    population NUMERIC,
+    new_vaccinations NUMERIC,
+    ConcatinatingPeopleVaccinations NUMERIC
+)
+INSERT INTO #PercentagePeopleVaccinated
+SELECT Dea.continent,Dea.[location],Dea.[date],dea.population,Vac.new_vaccinations,
+SUM(Vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location,dea.date) AS ConcatinatingPeopleVaccinations
+FROM CovidDeathscsv as Dea
+JOIN CovidVaccinationscsv as Vac
+ON Dea.[location] = Vac.[location]
+AND Dea.[date] = Vac.[date]
+WHERE Dea.continent is not NULL
+ORDER BY 2,3
+
+SELECT *,(ConcatinatingPeopleVaccinations/CONVERT(float,population))*100 AS VaccinatedRatio
+FROM #PercentagePeopleVaccinated
+WHERE ConcatinatingPeopleVaccinations is not NULL
+
+--Creating views for visualization purpose in future
+
+CREATE VIEW TotalCasesOnPopulation AS
+SELECT [location],date,total_cases,population, (total_cases/CAST(population AS float))*100 as TotalCasesOnPopulation
+FROM PortifolioProject..CovidDeathscsv
+--ORDER BY 1,2
+
+CREATE VIEW RatioBtwCasesAndDeaths AS
+Select [location],date,total_cases,total_deaths, (total_cases/total_deaths)*100 as RatioBtwCasesAndDeaths
+From PortifolioProject..CovidDeathscsv
+Where continent is not null 
+--order by 3,4
+
+CREATE VIEW HighestInfectionRate AS
+Select [location],population,MAX(total_cases) as HighestInfectionCount, (MAX(total_cases)/CONVERT(float,population))*100 as HighestInfectionRate
+From PortifolioProject..CovidDeathscsv
+Where continent is not null 
+GROUP BY location,population
+--order by HighestInfectionRate DESC
+
+CREATE VIEW HighestCardiovaascularDeathRate AS
+Select location,population,MAX(cardiovasc_death_rate) as HighestCardiovascularDeathCount,
+(MAX(cardiovasc_death_rate)/CONVERT(float,population)) as HighestCardiovaascularDeathRate
+From PortifolioProject..CovidDeathscsv
+Where continent is not null 
+GROUP BY [location],population
+--order by HighestCardiovaascularDeathRate DESC , HighestCardiovascularDeathCount DESC
+
+CREATE VIEW TotalDeathCount AS
+Select continent, MAX(cast(Total_deaths as int)) as TotalDeathCount
+From PortifolioProject..CovidDeathscsv
+--Where location like '%states%'
+Where continent is not null 
+Group by continent
+--order by TotalDeathCount desc
+
+CREATE VIEW HighestDeathPercentage AS
+WITH Max_DeathRate
+AS
+(
+Select [location],population,SUM(total_deaths) as TotalDeathCount
+From PortifolioProject..CovidDeathscsv
+WHERE continent is not NULL
+GROUP BY [location],population
+)
+SELECT *,
+(MAX(TotalDeathCount)/CONVERT(float,population)) as HighestDeathPercentage
+FROM Max_DeathRate
+GROUP BY TotalDeathCount,population,[location]
+--ORDER BY HighestDeathPercentage DESC
+
+CREATE VIEW PercentagePeopleVaccinated AS
+SELECT Dea.continent,Dea.[location],Dea.[date],dea.population,Vac.new_vaccinations,
+SUM(Vac.new_vaccinations) OVER (PARTITION BY dea.location ORDER BY dea.location,dea.date) AS ConcatinatingPeopleVaccinations
+FROM CovidDeathscsv as Dea
+JOIN CovidVaccinationscsv as Vac
+ON Dea.[location] = Vac.[location]
+AND Dea.[date] = Vac.[date]
+WHERE Dea.continent is not NULL
+--ORDER BY 2,3
+
+
